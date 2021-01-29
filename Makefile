@@ -1,9 +1,9 @@
-CFLAGS?= -Wextra -Wall -Wno-unused-parameter -g -Wno-multichar -Wno-unused-but-set-variable
+CFLAGS?= -Wextra -Wall -Wno-unused-parameter -g -Wno-multichar -Wno-unused-but-set-variable -O3
 # libs to include when linking (with -l<name> flags)
-#libs:= X11 lua5.3
+libs:= z
 # c source code files
-srcs:= info test/x
-output:= info
+srcs:= apng
+output:= apng-hack
 # location for intermediate files (.o and .mk)
 junkdir:= .junk
 
