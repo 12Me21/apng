@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdint.h>
-#include <byteswap.h>
+#include <arpa/inet.h>
 #include <zlib.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -32,11 +32,11 @@ void write2(U8* buffer, ssize_t n) {
 U32 read32be(void) {
 	read2(4);
 	U32 res = *(U32*)temp; // uh idk if this is allowed... alignment and all
-	return bswap_32(res);
+	return ntohl(res);
 }
 
 void write32be(U32 d) {
-	d = bswap_32(d);
+	d = htonl(d);
 	write2((U8*)&d, 4);
 }
 
@@ -52,7 +52,7 @@ void writecrc(void* data, ssize_t size) {
 }
 
 void write32be_crc(U32 d) {
-	d = bswap_32(d);
+	d = htonl(d);
 	writecrc(&d, 4);
 }
 
@@ -65,10 +65,6 @@ void trans(ssize_t b) {
 	write2(temp, b);
 }
 
-U32 bswap32(U32 x) {
-	return bswap_32(x);
-}
-
 void writeFctl(U32 num, U32 width, U32 height, U16 dn, U16 dd) {
 	write32be(26);
 	crc_start();
@@ -77,8 +73,8 @@ void writeFctl(U32 num, U32 width, U32 height, U16 dn, U16 dd) {
 	write32be_crc(width);
 	write32be_crc(height);
 	writecrc("\0\0\0\0\0\0\0\0", 8);
-	dn = bswap_16(dn);
-	dd = bswap_16(dd);
+	dn = htons(dn);
+	dd = htons(dd);
 	writecrc(&dn, 2);
 	writecrc(&dd, 2);
 	writecrc("\0\0", 2);
