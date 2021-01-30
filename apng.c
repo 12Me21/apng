@@ -11,71 +11,84 @@ typedef uint16_t U16;
 
 U8 temp[100000]; //hopefully no png chunks are larger than this!
 
-U32 read32be(void) {
-	U32 res;
-	if (read(0, &res, 4)==4) {// ?: exit(2);
-		return bswap_32(res);
-	} else {
-		return 0;
+U8* read2(ssize_t n) {
+	U8* dest = temp;
+	while (n) {
+		ssize_t amt = read(0, dest, n);
+		n -= amt;
+		dest += amt;
 	}
+	return temp;
+}
+
+void write2(U8* buffer, ssize_t n) {
+	while (n) {
+		ssize_t amt = write(1, buffer, n);
+		n -= amt;
+		buffer += amt;
+	}
+}
+
+U32 read32be(void) {
+	read2(4);
+	U32 res = *(U32*)temp; // uh idk if this is allowed... alignment and all
+	return bswap_32(res);
 }
 
 void write32be(U32 d) {
 	d = bswap_32(d);
-	write(1, &d, 4);
+	write2((U8*)&d, 4);
 }
 
-void writecrc(void* data, ssize_t size, U32* crc) {
-	if (crc)
-		*crc = crc32_z(*crc, data, size);
-	while (size)
-		size -= write(1, data, size);
+U32 crc;
+
+void crc_start() {
+	crc = crc32_z(0, Z_NULL, 0);
+}
+
+void writecrc(void* data, ssize_t size) {
+	crc = crc32_z(crc, data, size);
+	write2(data, size);
+}
+
+void write32be_crc(U32 d) {
+	d = bswap_32(d);
+	writecrc(&d, 4);
 }
 
 void skip(ssize_t b) {
-	U8* temp2 = temp;
-	while (b) {
-		ssize_t amt = read(0, temp2, b);
-		if (amt < 0)
-			exit(2);
-		temp2 += amt;
-		b -= amt;
-		if (errno) exit(1);
-	}
+	read2(b);
 }
 
 void trans(ssize_t b) {
-	while (b) {
-		ssize_t amt = read(0, temp, b);
-		write(1, temp, amt);
-		b -= amt;
-	}
+	read2(b);
+	write2(temp, b);
+}
+
+U32 bswap32(U32 x) {
+	return bswap_32(x);
 }
 
 void writeFctl(U32 num, U32 width, U32 height, U16 dn, U16 dd) {
-	num = bswap_32(num);
-	width = bswap_32(width);
-	height = bswap_32(height);
-	U32 c = crc32_z(0, Z_NULL, 0);
-	U32 len = bswap_32(26);
-	writecrc(&len, 4, NULL);
-	writecrc("fcTL", 4, &c);
-	writecrc(&num, 4, &c);
-	writecrc(&width, 4, &c);
-	writecrc(&height, 4, &c);
-	writecrc("\0\0\0\0\0\0\0\0", 8, &c);
+	write32be(26);
+	crc_start();
+	writecrc("fcTL", 4);
+	write32be_crc(num);
+	write32be_crc(width);
+	write32be_crc(height);
+	writecrc("\0\0\0\0\0\0\0\0", 8);
 	dn = bswap_16(dn);
 	dd = bswap_16(dd);
-	writecrc(&dn, 2, &c);
-	writecrc(&dd, 2, &c);
-	writecrc("\0\0", 2, &c);
-	c = bswap_32(c);
-	writecrc(&c, 4, NULL);
+	writecrc(&dn, 2);
+	writecrc(&dd, 2);
+	writecrc("\0\0", 2);
+	write32be(crc);
 }
 
 int main(int argc, char** argv) {
 	if (argc != 4) {
 		dprintf(2, "Usage: %s nframes delayn delayd\ngenerates animation with `nframes` frames, and a frame delay of `delayn`/`delayd` seconds\n", argv[0]);
+		dprintf(2, "input png files should be sent on stdin, and output is to stdout.");
 		return 1;
 	}
 	trans(8);
@@ -98,16 +111,12 @@ int main(int argc, char** argv) {
 				write32be(height);
 				trans(len-4-4+4);
 				
-				U32 c = crc32_z(0, Z_NULL, 0);;
-				U32 len = bswap_32(8);
-				writecrc(&len, 4, NULL);
-				frames = bswap_32(frames);
-				writecrc("acTL", 4, &c);
-				writecrc(&frames, 4, &c);
-				frames = bswap_32(frames);
-				writecrc("\0\0\0\0", 4, &c);
-				c = bswap_32(c);
-				writecrc(&c, 4, NULL);
+				crc_start();
+				write32be(8);
+				writecrc("acTL", 4);
+				write32be_crc(frames);
+				writecrc("\0\0\0\0", 4);
+				write32be(crc);
 			} else {
 				skip(len-4-4+4);
 			}
@@ -125,16 +134,13 @@ int main(int argc, char** argv) {
 				write32be(type);
 				trans(len + 4);
 			} else {
-				U32 c = crc32_z(0, Z_NULL, 0);
+				crc_start();
 				write32be(len+4);
-				writecrc("fdAT", 4, &c);
-				U32 sframe=bswap_32(seq);
-				seq++;
-				writecrc(&sframe, 4, &c);
-				skip(len);
-				writecrc(temp, len, &c);
-				c = bswap_32(c);
-				writecrc(&c, 4, NULL);
+				writecrc("fdAT", 4);
+				write32be_crc(seq++);
+				read2(len);
+				writecrc(temp, len);
+				write32be(crc);
 				skip(4);
 			}
 			break;
@@ -147,10 +153,9 @@ int main(int argc, char** argv) {
 	}
  done:
 	dprintf(2, "END!");
-	U32 c = crc32_z(0, Z_NULL, 0);;
-	writecrc("\0\0\0\0", 4, NULL);
-	writecrc("IEND", 4, &c);
-	c = bswap_32(c);
-	writecrc(&c, 4, NULL);
+	write32be(0);
+	crc_start();
+	writecrc("IEND", 4);
+	write32be(crc);
 	return 0;
 }
