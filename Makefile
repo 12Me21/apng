@@ -1,32 +1,23 @@
-CFLAGS?= -Wextra -Wall -Wno-unused-parameter -g -Wno-multichar -Wno-unused-but-set-variable -O3
+CFLAGS+= -Wextra -Wall -Wno-unused-parameter -g -Wno-multichar -Wno-unused-but-set-variable -O3
 # libs to include when linking (with -l<name> flags)
 libs:= z
 # c source code files
 srcs:= apng
 output:= apng-hack
-# location for intermediate files (.o and .mk)
-junkdir:= .junk
 
-CC=@echo '[33m'$@'	[37mfrom: [32m'$^'[m' ; cc
+ifdef seed
+creats != seq 0.3 0.1 2.0
+frame = $(seed)/%.png
 
-$(output): $(srcs:%=$(junkdir)/%.o)
-	$(CC) $(CFLAGS) $(addprefix -l,$(libs)) $^ -o $@
+$(seed).apng: $(creats:%=$(frame))
+	cat $^ | ./apng-hack 18 1 12 >$@
+	$(RM) $(dir $(frame))
 
-$(junkdir)/%.mk: %.c
-	$(CC) $(CFLAGS) -MF$@ -MG -MM -MP -MT$@ -MT$(<:%.c=$(junkdir)/%.o) $<
+$(frame): $(seed)
+	curl -s https://thisanimedoesnotexist.ai/results/psi-$(@:$(frame)=%)/seed$(seed).png -o $@
 
-$(junkdir)/%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(seed):
+	mkdir -p $@
+endif
 
-# Normally, Make will try to generate nonexistent included files (in this case, with our $(junkdir)/%.mk rule
-# But for some reason, include fails if the file is in a nonexistent directory.
-# This is the only solution I can think of:
-$(shell mkdir -p $(addprefix $(junkdir)/,$(dir $(srcs))))
-#PROBLEM: this includes files even if `clean` is being run, causing it to generate dependency files xd
-include $(srcs:%=$(junkdir)/%.mk)
-
-#clean:
-#	$(RM) -r $(junkdir)
-#	$(RM) $(output)
-
-#.PHONY: clean
+include Nice.mk

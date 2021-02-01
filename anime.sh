@@ -1,3 +1,7 @@
+[ $1 ] && seed=$1 make -j20
+exit
+
+# old code if you want it:
 dir=`mktemp -d` || exit
 for i in `seq 0.3 0.1 2.0`; do
 	echo downloading frame $i >&2
@@ -5,6 +9,6 @@ for i in `seq 0.3 0.1 2.0`; do
 done
 wait
 echo download finished >&2
-cat $dir/*.png | ./apng-hack 18 1 10 >$1.apng
+cat $dir/*.png | ./apng-hack 18 1 12 >$1.apng
 echo done
 rm -rf $dir
